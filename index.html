@@ -1,0 +1,1637 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Familien-Einkauf – Gemeinsame Einkaufsliste</title>
+  
+  <!-- Tailwind CSS für modernes, responsives Design -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    /* Versteckt horizontale Scrollbars bei den Laden-Chips, erlaubt aber flüssiges Wischen */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    /* Sanfte Animationen für Listen-Einträge & Modals */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.2s ease-out forwards;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-emerald-100 selection:text-emerald-900">
+
+  <!-- ==================== HEADER & ROLLEN-UMSCHALTER ==================== -->
+  <header class="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-sm">
+    <div class="max-w-2xl mx-auto px-4 pt-3 pb-3">
+      <!-- Obere Zeile: Titel, Sync-Status & Einstellungen -->
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm shadow-emerald-600/20">
+            <i data-lucide="shopping-basket" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h1 class="text-base sm:text-lg font-bold text-slate-900 leading-tight">Familien-Einkauf</h1>
+            <button id="syncStatusBtn" type="button" class="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700 transition">
+              <span id="syncDot" class="w-2 h-2 rounded-full bg-amber-400"></span>
+              <span id="syncText">Lokal (Demo-Modus)</span>
+            </button>
+          </div>
+        </div>
+
+        <button id="openSettingsBtn" type="button" aria-label="Cloud-Einstellungen"
+          class="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-slate-600 transition flex items-center gap-1.5 text-xs font-semibold">
+          <i data-lucide="cloud-cog" class="w-4 h-4"></i>
+          <span class="hidden sm:inline">Sync / Setup</span>
+        </button>
+      </div>
+
+      <!-- Prominenter Rollen-Umschalter (Segmented Control) -->
+      <div class="bg-slate-100 p-1 rounded-2xl grid grid-cols-2 gap-1 relative" role="tablist">
+        <button id="tabRequester" type="button" role="tab" aria-selected="true"
+          class="py-2.5 px-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all bg-white text-emerald-700 shadow-sm">
+          <i data-lucide="list-plus" class="w-4 h-4"></i>
+          <span>Anfragender</span>
+          <span id="badgeRequesterCount" class="ml-0.5 text-xs bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-extrabold">0</span>
+        </button>
+        <button id="tabShopper" type="button" role="tab" aria-selected="false"
+          class="py-2.5 px-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all text-slate-600 hover:text-slate-900">
+          <i data-lucide="shopping-cart" class="w-4 h-4"></i>
+          <span>Einkaufender</span>
+          <span id="badgeShopperCount" class="ml-0.5 text-xs bg-slate-200/80 text-slate-700 px-2 py-0.5 rounded-full font-extrabold">0</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== HAUPTBEREICH ==================== -->
+  <main class="flex-1 max-w-2xl w-full mx-auto px-4 py-4 pb-24">
+
+    <!-- =================================================================== -->
+    <!-- MODUS 1: ANFRAGENDER (Wunschliste / Schnelles Eintragen)            -->
+    <!-- =================================================================== -->
+    <section id="viewRequester" class="space-y-5">
+      <!-- Eingabe-Karte -->
+      <div class="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-200/80">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+            <i data-lucide="sparkles" class="w-4 h-4 text-emerald-500"></i>
+            Was wird gebraucht?
+          </h2>
+        </div>
+
+        <form id="addItemForm" class="space-y-3">
+          <!-- Produktname -->
+          <div>
+            <label for="inputName" class="sr-only">Produktname</label>
+            <input id="inputName" type="text" required autocomplete="off"
+              placeholder="z. B. Hafermilch, Vollkornbrot, Äpfel..."
+              class="w-full px-4 py-3.5 rounded-xl bg-slate-50 border border-slate-200 text-base font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition" />
+          </div>
+
+          <!-- Menge & Notiz nebeneinander -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div class="relative">
+              <div class="absolute inset-y-0 left-3.5 flex items-center pointer-events-none text-slate-400">
+                <i data-lucide="hash" class="w-4 h-4"></i>
+              </div>
+              <input id="inputQty" type="text" autocomplete="off"
+                placeholder="Menge (z. B. 2x, 500g)"
+                class="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition" />
+            </div>
+
+            <div class="relative">
+              <div class="absolute inset-y-0 left-3.5 flex items-center pointer-events-none text-slate-400">
+                <i data-lucide="sticky-note" class="w-4 h-4"></i>
+              </div>
+              <input id="inputNote" type="text" autocomplete="off"
+                placeholder="Notiz (z. B. Bio, Barista)"
+                class="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition" />
+            </div>
+          </div>
+
+          <button type="submit"
+            class="w-full py-3.5 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold text-base shadow-md shadow-emerald-600/20 transition flex items-center justify-center gap-2">
+            <i data-lucide="plus-circle" class="w-5 h-5"></i>
+            <span>Auf die Einkaufsliste setzen</span>
+          </button>
+        </form>
+      </div>
+
+      <!-- Liste der aktuell angefragten Artikel -->
+      <div>
+        <div class="flex items-center justify-between mb-2.5 px-1">
+          <h3 class="text-sm font-bold text-slate-700">Aktuell auf der Liste</h3>
+          <span id="requesterListSummary" class="text-xs font-medium text-slate-500">0 Artikel offen</span>
+        </div>
+
+        <div id="requesterListContainer" class="space-y-2.5">
+          <!-- Wird dynamisch befüllt -->
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- MODUS 2: EINKAUFENDER (Laden-Filter, Taggen & Supermarkt-Abhaken)   -->
+    <!-- =================================================================== -->
+    <section id="viewShopper" class="hidden space-y-4">
+      
+      <!-- Horizontale Laden-Tag Filterleiste -->
+      <div class="bg-white rounded-2xl p-3.5 shadow-sm border border-slate-200/80">
+        <div class="flex items-center justify-between mb-2.5 px-0.5">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+            <i data-lucide="store" class="w-3.5 h-3.5 text-emerald-600"></i>
+            Laden auswählen
+          </span>
+          <button id="openManageStoresBtn" type="button"
+            class="text-xs font-semibold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-emerald-50 transition">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+            <span>Neuer Laden</span>
+          </button>
+        </div>
+
+        <!-- Scrollbare Chip-Leiste -->
+        <div id="storeFilterBar" class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+          <!-- Filter-Chips werden dynamisch gerendert -->
+        </div>
+      </div>
+
+      <!-- Aktiver Filter-Banner & Hinweis -->
+      <div class="flex items-center justify-between px-1">
+        <div class="flex items-center gap-2">
+          <h2 id="activeFilterTitle" class="text-base font-bold text-slate-800">Alle Artikel</h2>
+          <span id="activeFilterCount" class="text-xs font-bold bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full">0</span>
+        </div>
+        <span class="text-xs text-slate-400 hidden sm:inline">Tippe links zum Abhaken</span>
+      </div>
+
+      <!-- Offene Artikel im Einkaufsmodus -->
+      <div id="shopperListContainer" class="space-y-2.5">
+        <!-- Wird dynamisch befüllt -->
+      </div>
+
+      <!-- Einklappbarer Bereich: Kürzlich eingekauft -->
+      <div id="completedSection" class="pt-4 hidden">
+        <div class="bg-slate-100/80 rounded-2xl border border-slate-200/80 overflow-hidden">
+          <div class="flex items-center justify-between px-4 py-3">
+            <button id="toggleCompletedBtn" type="button" class="flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-slate-900 transition">
+              <i id="completedChevron" data-lucide="chevron-down" class="w-4 h-4 transition-transform"></i>
+              <span>Kürzlich eingekauft</span>
+              <span id="completedCountBadge" class="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full">0</span>
+            </button>
+
+            <button id="clearCompletedBtn" type="button"
+              class="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1.5 rounded-lg transition flex items-center gap-1">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              <span>Endgültig leeren</span>
+            </button>
+          </div>
+
+          <div id="completedListContainer" class="px-3 pb-3 space-y-2">
+            <!-- Abgehakte Artikel -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==================== MODAL 1: ARTIKEL BEARBEITEN ==================== -->
+  <div id="editItemModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl border border-slate-100 animate-fade-in">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold text-slate-900">Artikel bearbeiten</h3>
+        <button type="button" data-close-modal="editItemModal" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <form id="editItemForm" class="space-y-3.5">
+        <input type="hidden" id="editItemId" />
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Produktname *</label>
+          <input id="editItemName" type="text" required
+            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-base font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white" />
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Menge (optional)</label>
+          <input id="editItemQty" type="text" placeholder="z. B. 2x, 500g"
+            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white" />
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Notiz (optional)</label>
+          <input id="editItemNote" type="text" placeholder="z. B. Bio, bestimmte Marke"
+            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white" />
+        </div>
+        <div class="flex gap-2.5 pt-2">
+          <button type="button" data-close-modal="editItemModal"
+            class="flex-1 py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm transition">
+            Abbrechen
+          </button>
+          <button type="submit"
+            class="flex-1 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-sm transition">
+            Speichern
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL 2: NEUER LADEN / LÄDEN VERWALTEN ==================== -->
+  <div id="manageStoresModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl border border-slate-100 animate-fade-in max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+          <i data-lucide="store" class="w-5 h-5 text-emerald-600"></i>
+          <span>Läden & Tags verwalten</span>
+        </h3>
+        <button type="button" data-close-modal="manageStoresModal" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Neuen Laden hinzufügen -->
+      <form id="addStoreForm" class="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 mb-4 space-y-3">
+        <label class="block text-xs font-bold text-slate-500 uppercase">Neuen Laden hinzufügen</label>
+        <div class="flex gap-2">
+          <input id="newStoreEmoji" type="text" maxlength="2" value="🏪" aria-label="Emoji"
+            class="w-12 text-center py-2.5 rounded-xl bg-white border border-slate-200 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          <input id="newStoreName" type="text" required placeholder="z. B. Lidl, Rossmann, Baumarkt..."
+            class="flex-1 px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+        </div>
+        
+        <!-- Farbauswahl -->
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-slate-500">Tag-Farbe:</span>
+          <div id="colorPickerGroup" class="flex items-center gap-1.5">
+            <!-- Farb-Buttons werden per JS gesetzt -->
+          </div>
+        </div>
+
+        <button type="submit"
+          class="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition flex items-center justify-center gap-1.5">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span>Laden anlegen</span>
+        </button>
+      </form>
+
+      <!-- Bestehende Läden -->
+      <div class="flex-1 overflow-y-auto space-y-2 pr-1">
+        <span class="block text-xs font-bold text-slate-400 uppercase mb-1">Vorhandene Läden</span>
+        <div id="existingStoresList" class="space-y-2">
+          <!-- Wird dynamisch befüllt -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL 3: TAG-AUSWAHL FÜR EINEN ARTIKEL ==================== -->
+  <div id="assignTagsModal" class="fixed inset-0 z-50 hidden items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-xs p-0 sm:p-4">
+    <div class="bg-white rounded-t-3xl sm:rounded-2xl max-w-md w-full p-5 shadow-xl border border-slate-100 animate-fade-in">
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-xs font-bold uppercase tracking-wider text-emerald-600">Läden zuweisen</span>
+        <button type="button" data-close-modal="assignTagsModal" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <h3 id="assignTagsItemTitle" class="text-lg font-bold text-slate-900 mb-1 truncate">Produktname</h3>
+      <p class="text-xs text-slate-500 mb-4">Wähle alle Läden aus, in denen dieses Produkt gekauft werden kann:</p>
+
+      <div id="assignTagsOptions" class="grid grid-cols-2 gap-2.5 mb-5 max-h-64 overflow-y-auto">
+        <!-- Laden-Toggle-Buttons -->
+      </div>
+
+      <div class="flex gap-2">
+        <button type="button" id="quickAddStoreFromAssignBtn"
+          class="py-3 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs flex items-center gap-1 transition">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span>Neuer Laden</span>
+        </button>
+        <button type="button" data-close-modal="assignTagsModal"
+          class="flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition">
+          Fertig
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL 4: FIREBASE CLOUD SYNC EINSTELLUNGEN ==================== -->
+  <div id="settingsModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-5 shadow-xl border border-slate-100 animate-fade-in max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+          <i data-lucide="cloud" class="w-5 h-5 text-emerald-600"></i>
+          <span>Echtzeit-Sync (Realtime Database)</span>
+        </h3>
+        <button type="button" data-close-modal="settingsModal" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-600 leading-relaxed mb-3">
+        Aktuell nutzt die App ohne eigene Cloud-Daten den <strong>lokalen Demo-Modus</strong> (Speicherung im Browser). 
+        Um die Liste in Echtzeit mit deiner Familie zu teilen, füge hier eure <strong>Firebase Realtime Database Config</strong> ein:
+      </p>
+
+      <!-- Anleitung kompakt für Realtime Database -->
+      <div class="bg-slate-50 border border-slate-200/80 rounded-xl p-3 mb-3 text-xs text-slate-600 space-y-1">
+        <p class="font-bold text-slate-700">Kurzanleitung (Realtime Database):</p>
+        <ol class="list-decimal list-inside space-y-0.5">
+          <li>In der <span class="font-mono text-slate-800">Firebase Console</span> kostenloses Projekt erstellen.</li>
+          <li><strong>Build → Realtime Database</strong> aktivieren und im <strong>Testmodus</strong> starten (ohne Login nutzbar).</li>
+          <li>Unter <em>Projekteinstellungen → Web-App</em> das <span class="font-mono text-slate-800">firebaseConfig</span>-Objekt (inkl. <span class="font-mono text-slate-800">databaseURL</span>) kopieren und unten einfügen.</li>
+        </ol>
+      </div>
+
+      <form id="firebaseConfigForm" class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Familien-Listen-ID (Raumname)</label>
+          <input id="familyRoomInput" type="text" required value="unsere-familie"
+            placeholder="z. B. familie-mueller"
+            class="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          <p class="text-[11px] text-slate-400 mt-1">Alle Geräte mit derselben Listen-ID teilen dieselbe Einkaufsliste.</p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Firebase Config (JSON oder JS-Snippet)</label>
+          <textarea id="firebaseConfigTextarea" rows="5"
+            placeholder='{"apiKey": "AIzaSy...", "databaseURL": "https://dein-projekt-default-rtdb.europe-west1.firebasedatabase.app", "projectId": "..."}'
+            class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">
+            Database URL <span class="font-normal text-slate-400 normal-case">(optional, falls nicht im Snippet enthalten)</span>
+          </label>
+          <input id="databaseUrlFallbackInput" type="url"
+            placeholder="https://dein-projekt-default-rtdb.europe-west1.firebasedatabase.app"
+            class="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          <p class="text-[11px] text-slate-400 mt-1">Falls <span class="font-mono">databaseURL</span> oben fehlt, erkennt die App sie automatisch oder nutzt dieses Feld.</p>
+        </div>
+
+        <div id="firebaseErrorMsg" class="hidden text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-xl p-2.5"></div>
+
+        <div class="flex flex-wrap gap-2 pt-1">
+          <button type="button" id="disconnectFirebaseBtn"
+            class="py-2.5 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition">
+            Lokal / Demo nutzen
+          </button>
+          <button type="submit"
+            class="flex-1 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-sm transition">
+            Verbinden & Speichern
+          </button>
+        </div>
+
+        <!-- Teilen-Bereich für Familienmitglieder -->
+        <div id="shareSection" class="pt-3 border-t border-slate-200/80 hidden">
+          <div class="bg-emerald-50/70 border border-emerald-200/80 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div>
+              <p class="text-xs font-bold text-emerald-900">Für Familie freigeben</p>
+              <p class="text-[11px] text-emerald-700">Direkt-Link kopieren – verbindet andere Handys automatisch ohne Setup.</p>
+            </div>
+            <button type="button" id="copyShareLinkBtn"
+              class="shrink-0 py-2 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition flex items-center justify-center gap-1.5">
+              <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
+              <span>Link kopieren</span>
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== TOAST BENACHRICHTIGUNG ==================== -->
+  <div id="toastContainer" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex flex-col items-center gap-2 w-full max-w-sm px-4"></div>
+
+  <!-- ==================== JAVASCRIPT & FIREBASE REALTIME DB MODUL ==================== -->
+  <script type="module">
+    import { initializeApp, deleteApp, getApps } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { 
+      getDatabase, ref, onValue, set, push, update, remove, get 
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+
+    // =========================================================================
+    // 1. KONSTANTEN, FEST VERANKERTE FIREBASE-CONFIG & STANDARD-LÄDEN
+    // =========================================================================
+    const HARDCODED_ROOM_ID = 'Bring-it';
+
+    const HARDCODED_FIREBASE_CONFIG = {
+      apiKey: "AIzaSyCiSlImb4cp5i0LczCiGAXkdNcqMtiNBGQ",
+      authDomain: "bring-it-c6984.firebaseapp.com",
+      projectId: "bring-it-c6984",
+      storageBucket: "bring-it-c6984.firebasestorage.app",
+      messagingSenderId: "1016945483914",
+      appId: "1:1016945483914:web:3bef1844a7fc729faa4d73",
+      measurementId: "G-XDPM3PV3PH"
+    };
+
+    const LS_KEYS = {
+      ACTIVE_TAB: 'fam_einkauf_active_tab',
+      FB_CONFIG: 'fam_einkauf_fb_config',
+      ROOM_ID: 'fam_einkauf_room_id',
+      DEMO_ITEMS: 'fam_einkauf_demo_items',
+      DEMO_STORES: 'fam_einkauf_demo_stores'
+    };
+
+    const COLOR_PALETTE = {
+      emerald: {
+        label: 'Grün',
+        dot: 'bg-emerald-500',
+        badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        chipActive: 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+      },
+      blue: {
+        label: 'Blau',
+        dot: 'bg-blue-500',
+        badge: 'bg-blue-50 text-blue-700 border-blue-200',
+        chipActive: 'bg-blue-600 text-white border-blue-600 shadow-xs'
+      },
+      amber: {
+        label: 'Amber',
+        dot: 'bg-amber-500',
+        badge: 'bg-amber-50 text-amber-800 border-amber-200',
+        chipActive: 'bg-amber-500 text-white border-amber-500 shadow-xs'
+      },
+      rose: {
+        label: 'Rot',
+        dot: 'bg-rose-500',
+        badge: 'bg-rose-50 text-rose-700 border-rose-200',
+        chipActive: 'bg-rose-600 text-white border-rose-600 shadow-xs'
+      },
+      purple: {
+        label: 'Lila',
+        dot: 'bg-purple-500',
+        badge: 'bg-purple-50 text-purple-700 border-purple-200',
+        chipActive: 'bg-purple-600 text-white border-purple-600 shadow-xs'
+      },
+      cyan: {
+        label: 'Türkis',
+        dot: 'bg-cyan-500',
+        badge: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+        chipActive: 'bg-cyan-600 text-white border-cyan-600 shadow-xs'
+      }
+    };
+
+    const DEFAULT_STORES = [
+      { id: 'store-rewe', name: 'Rewe', emoji: '🛒', color: 'rose' },
+      { id: 'store-aldi', name: 'Aldi', emoji: '🏬', color: 'blue' },
+      { id: 'store-dm', name: 'dm', emoji: '🧴', color: 'purple' },
+      { id: 'store-baecker', name: 'Bäcker', emoji: '🥖', color: 'amber' },
+      { id: 'store-markt', name: 'Wochenmarkt', emoji: '🍎', color: 'emerald' },
+      { id: 'store-apotheke', name: 'Apotheke', emoji: '💊', color: 'cyan' }
+    ];
+
+    const DEMO_INITIAL_ITEMS = [
+      {
+        id: 'demo-1',
+        name: 'Hafermilch Barista',
+        qty: '2x',
+        note: 'Ungesüßt',
+        storeIds: ['store-rewe', 'store-dm'],
+        completed: false,
+        createdAt: Date.now() - 300000,
+        completedAt: 0
+      },
+      {
+        id: 'demo-2',
+        name: 'Vollkornbrot',
+        qty: '1 Laib',
+        note: 'Geschnitten',
+        storeIds: ['store-baecker'],
+        completed: false,
+        createdAt: Date.now() - 200000,
+        completedAt: 0
+      },
+      {
+        id: 'demo-3',
+        name: 'Bananen & Äpfel',
+        qty: '1 kg',
+        note: 'Bio',
+        storeIds: ['store-aldi', 'store-markt'],
+        completed: false,
+        createdAt: Date.now() - 100000,
+        completedAt: 0
+      },
+      {
+        id: 'demo-4',
+        name: 'Spülmaschinentabs',
+        qty: '1 Packung',
+        note: '',
+        storeIds: [],
+        completed: false,
+        createdAt: Date.now() - 50000,
+        completedAt: 0
+      }
+    ];
+
+    // =========================================================================
+    // 2. ZENTRALER APP-STATE
+    // =========================================================================
+    const state = {
+      mode: 'demo', // 'demo' | 'firebase'
+      activeTab: localStorage.getItem(LS_KEYS.ACTIVE_TAB) || 'requester', // 'requester' | 'shopper'
+      activeStoreFilter: 'ALL', // 'ALL' | 'UNASSIGNED' | <storeId>
+      completedExpanded: true,
+      selectedNewStoreColor: 'emerald',
+      assigningItemId: null,
+      stores: [],
+      items: [],
+      // Firebase Realtime Database Instanzen
+      fbApp: null,
+      fbDb: null,
+      unsubItems: null,
+      unsubStores: null
+    };
+
+    // =========================================================================
+    // 3. HILFSFUNKTIONEN (UI, TOASTS, FARBEN, URL-SHARING)
+    // =========================================================================
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function getColorTokens(colorKey) {
+      return COLOR_PALETTE[colorKey] || COLOR_PALETTE.emerald;
+    }
+
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toastContainer');
+      if (!container) return;
+      const toast = document.createElement('div');
+      const bgClass = type === 'error'
+        ? 'bg-rose-600 text-white'
+        : 'bg-slate-900/95 text-white';
+      toast.className = `${bgClass} px-4 py-2.5 rounded-xl shadow-lg text-xs font-semibold animate-fade-in text-center`;
+      toast.textContent = message;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.25s ease';
+        setTimeout(() => toast.remove(), 260);
+      }, 2400);
+    }
+
+    function openModal(modalId) {
+      const el = document.getElementById(modalId);
+      if (!el) return;
+      el.classList.remove('hidden');
+      el.classList.add('flex');
+    }
+
+    function closeModal(modalId) {
+      const el = document.getElementById(modalId);
+      if (!el) return;
+      el.classList.add('hidden');
+      el.classList.remove('flex');
+    }
+
+    function updateSyncIndicator(isConnected, label) {
+      const dot = document.getElementById('syncDot');
+      const text = document.getElementById('syncText');
+      const shareSection = document.getElementById('shareSection');
+      if (isConnected) {
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
+        if (shareSection) shareSection.classList.remove('hidden');
+      } else {
+        dot.className = 'w-2 h-2 rounded-full bg-amber-400';
+        if (shareSection) shareSection.classList.add('hidden');
+      }
+      text.textContent = label;
+    }
+
+    function encodeSharePayload(obj) {
+      const json = JSON.stringify(obj);
+      const bytes = new TextEncoder().encode(json);
+      let bin = '';
+      bytes.forEach(b => { bin += String.fromCharCode(b); });
+      return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    function decodeSharePayload(str) {
+      let b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+      while (b64.length % 4) b64 += '=';
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return JSON.parse(new TextDecoder().decode(bytes));
+    }
+
+    function buildShareUrl() {
+      const cfgStr = localStorage.getItem(LS_KEYS.FB_CONFIG);
+      const roomId = localStorage.getItem(LS_KEYS.ROOM_ID) || 'unsere-familie';
+      if (!cfgStr) return window.location.href;
+      const encodedCfg = encodeSharePayload(JSON.parse(cfgStr));
+      const url = new URL(window.location.href.split('#')[0].split('?')[0]);
+      url.searchParams.set('room', roomId);
+      url.searchParams.set('cfg', encodedCfg);
+      return url.toString();
+    }
+
+    function copyTextFallback(text) {
+      const temp = document.createElement('textarea');
+      temp.value = text;
+      temp.style.position = 'fixed';
+      temp.style.opacity = '0';
+      document.body.appendChild(temp);
+      temp.select();
+      const ok = document.execCommand('copy');
+      temp.remove();
+      return ok;
+    }
+
+    // =========================================================================
+    // 4. DATENSCHICHT (FIREBASE REALTIME DATABASE & LOCALSTORAGE DEMO)
+    // =========================================================================
+    function getRtdbRefs() {
+      const roomId = (localStorage.getItem(LS_KEYS.ROOM_ID) || 'unsere-familie')
+        .trim()
+        .replace(/[.#$\[\]\/]/g, '_') || 'unsere-familie';
+      return {
+        itemsRef: ref(state.fbDb, `lists/${roomId}/items`),
+        storesRef: ref(state.fbDb, `lists/${roomId}/stores`),
+        itemRef: (id) => ref(state.fbDb, `lists/${roomId}/items/${id}`),
+        storeRef: (id) => ref(state.fbDb, `lists/${roomId}/stores/${id}`)
+      };
+    }
+
+    // --- Demo-Modus Initialisierung ---
+    function initDemoMode() {
+      cleanupFirebaseListeners();
+      state.mode = 'demo';
+      state.fbApp = null;
+      state.fbDb = null;
+
+      try {
+        const storedStores = localStorage.getItem(LS_KEYS.DEMO_STORES);
+        const storedItems = localStorage.getItem(LS_KEYS.DEMO_ITEMS);
+        state.stores = storedStores ? JSON.parse(storedStores) : [...DEFAULT_STORES];
+        state.items = storedItems ? JSON.parse(storedItems) : [...DEMO_INITIAL_ITEMS];
+      } catch (_) {
+        state.stores = [...DEFAULT_STORES];
+        state.items = [...DEMO_INITIAL_ITEMS];
+      }
+
+      updateSyncIndicator(false, 'Lokal (Demo-Modus)');
+      renderAll();
+    }
+
+    function saveDemoState() {
+      localStorage.setItem(LS_KEYS.DEMO_STORES, JSON.stringify(state.stores));
+      localStorage.setItem(LS_KEYS.DEMO_ITEMS, JSON.stringify(state.items));
+      renderAll();
+    }
+
+    // --- Firebase Realtime Database Initialisierung (OHNE Authentication) ---
+    function cleanupFirebaseListeners() {
+      if (state.unsubItems) { state.unsubItems(); state.unsubItems = null; }
+      if (state.unsubStores) { state.unsubStores(); state.unsubStores = null; }
+    }
+
+    async function resolveValidDatabaseUrl(configObj) {
+      if (configObj.databaseURL && configObj.databaseURL.startsWith('https://')) {
+        return configObj.databaseURL.replace(/\/$/, '');
+      }
+      // Falls databaseURL im Snippet fehlt (passiert, wenn Config vor Aktivierung der RTDB kopiert wurde),
+      // testen wir automatisch die beiden Standard-Endpunkte (Europa & US) des Projekts.
+      const candidates = [
+        `https://${configObj.projectId}-default-rtdb.europe-west1.firebasedatabase.app`,
+        `https://${configObj.projectId}-default-rtdb.firebaseio.com`
+      ];
+      for (const candidate of candidates) {
+        try {
+          const probe = await fetch(`${candidate}/.json?shallow=true`);
+          if (probe.ok || probe.status === 401) {
+            return candidate;
+          }
+        } catch (_) {
+          // Nächsten Kandidaten prüfen
+        }
+      }
+      throw new Error(
+        'databaseURL fehlt in der Config und konnte nicht automatisch ermittelt werden. Bitte kopiere die Datenbank-URL aus "Build → Realtime Database" in das optionale URL-Feld.'
+      );
+    }
+
+    async function initFirebaseMode(rawConfigObj) {
+      try {
+        cleanupFirebaseListeners();
+        updateSyncIndicator(false, 'Verbinde mit Realtime DB...');
+
+        const resolvedDbUrl = await resolveValidDatabaseUrl(rawConfigObj);
+        const configObj = { ...rawConfigObj, databaseURL: resolvedDbUrl };
+
+        // Bestehende Firebase Apps bereinigen, falls Config gewechselt wurde
+        for (const existingApp of getApps()) {
+          await deleteApp(existingApp);
+        }
+
+        state.fbApp = initializeApp(configObj);
+        state.fbDb = getDatabase(state.fbApp);
+
+        // Gelöste databaseURL mit speichern, damit sie beim nächsten Start sofort da ist
+        localStorage.setItem(LS_KEYS.FB_CONFIG, JSON.stringify(configObj, null, 2));
+
+        const refs = getRtdbRefs();
+
+        // Verbindung & initiale Standard-Läden prüfen (ohne Auth-Zwang)
+        const initialStoresSnap = await get(refs.storesRef);
+        if (!initialStoresSnap.exists()) {
+          const initialStoresPayload = {};
+          DEFAULT_STORES.forEach((store) => {
+            initialStoresPayload[store.id] = {
+              name: store.name,
+              emoji: store.emoji,
+              color: store.color
+            };
+          });
+          await set(refs.storesRef, initialStoresPayload);
+        }
+
+        state.mode = 'firebase';
+        const roomId = localStorage.getItem(LS_KEYS.ROOM_ID) || 'unsere-familie';
+        updateSyncIndicator(true, `Live-Sync • ${roomId}`);
+
+        // Echtzeit-Listener für Läden
+        state.unsubStores = onValue(refs.storesRef, (snapshot) => {
+          const val = snapshot.val() || {};
+          const loadedStores = Object.entries(val).map(([id, data]) => ({
+            id,
+            name: data.name || '',
+            emoji: data.emoji || '🏪',
+            color: data.color || 'emerald'
+          }));
+          loadedStores.sort((a, b) => a.name.localeCompare(b.name, 'de'));
+          state.stores = loadedStores;
+          renderAll();
+        }, (err) => {
+          console.error('RTDB Stores Error:', err);
+          showToast('Fehler beim Laden der Läden (Regeln prüfen)', 'error');
+        });
+
+        // Echtzeit-Listener für Einkaufsartikel
+        state.unsubItems = onValue(refs.itemsRef, (snapshot) => {
+          const val = snapshot.val() || {};
+          const loadedItems = Object.entries(val).map(([id, data]) => ({
+            id,
+            name: data.name || '',
+            qty: data.qty || '',
+            note: data.note || '',
+            storeIds: Array.isArray(data.storeIds)
+              ? data.storeIds
+              : (data.storeIds && typeof data.storeIds === 'object' ? Object.values(data.storeIds) : []),
+            completed: Boolean(data.completed),
+            createdAt: data.createdAt || 0,
+            completedAt: data.completedAt || 0
+          }));
+          state.items = loadedItems;
+          renderAll();
+        }, (err) => {
+          console.error('RTDB Items Error:', err);
+          showToast('Sync-Fehler bei Artikeln (Regeln prüfen)', 'error');
+        });
+
+        return true;
+      } catch (error) {
+        console.error('Firebase RTDB Init Error:', error);
+        initDemoMode();
+        throw error;
+      }
+    }
+
+    // =========================================================================
+    // 5. CRUD-OPERATIONEN (ARTIKEL & LÄDEN FÜR REALTIME DB & DEMO)
+    // =========================================================================
+    async function addItem(name, qty, note) {
+      const cleanName = name.trim();
+      if (!cleanName) return;
+
+      const newItemData = {
+        name: cleanName,
+        qty: qty.trim(),
+        note: note.trim(),
+        storeIds: [],
+        completed: false,
+        createdAt: Date.now(),
+        completedAt: 0
+      };
+
+      if (state.mode === 'firebase' && state.fbDb) {
+        const refs = getRtdbRefs();
+        const newRef = push(refs.itemsRef);
+        await set(newRef, newItemData);
+      } else {
+        state.items.unshift({ id: 'item-' + Date.now(), ...newItemData });
+        saveDemoState();
+      }
+      showToast(`"${cleanName}" hinzugefügt`);
+    }
+
+    async function updateItemDetails(id, name, qty, note) {
+      const cleanName = name.trim();
+      if (!cleanName) return;
+
+      if (state.mode === 'firebase' && state.fbDb) {
+        const refs = getRtdbRefs();
+        await update(refs.itemRef(id), {
+          name: cleanName,
+          qty: qty.trim(),
+          note: note.trim()
+        });
+      } else {
+        const item = state.items.find(i => i.id === id);
+        if (item) {
+          item.name = cleanName;
+          item.qty = qty.trim();
+          item.note = note.trim();
+          saveDemoState();
+        }
+      }
+      showToast('Änderungen gespeichert');
+    }
+
+    async function toggleItemCompleted(id) {
+      const item = state.items.find(i => i.id === id);
+      if (!item) return;
+      const nextState = !item.completed;
+
+      if (state.mode === 'firebase' && state.fbDb) {
+        const refs = getRtdbRefs();
+        await update(refs.itemRef(id), {
+          completed: nextState,
+          completedAt: nextState ? Date.now() : 0
+        });
+      } else {
+        item.completed = nextState;
+        item.completedAt = nextState ? Date.now() : 0;
+        saveDemoState();
+      }
+      showToast(nextState ? `✓ "${item.name}" abgehakt` : `"${item.name}" wieder offen`);
+    }
+
+    async function toggleItemStoreTag(itemId, storeId) {
+      const item = state.items.find(i => i.id === itemId);
+      if (!item) return;
+
+      const currentTags = new Set(item.storeIds || []);
+      if (currentTags.has(storeId)) {
+        currentTags.delete(storeId);
+      } else {
+        currentTags.add(storeId);
+      }
+      const updatedTags = Array.from(currentTags);
+
+      if (state.mode === 'firebase' && state.fbDb) {
+        const refs = getRtdbRefs();
+        // Leere Arrays speichert RTDB nicht als Property – null entfernt sauber oder setzt Array
+        await update(refs.itemRef(itemId), { storeIds: updatedTags.length > 0 ? updatedTags : null });
+      } else {
+        item.storeIds = updatedTags;
+        saveDemoState();
+      }
+    }
+
+    async function deleteItem(id) {
+      if (state.mode === 'firebase' && state.fbDb) {
+        const refs = getRtdbRefs();
+        await remove(refs.itemRef(id));
+      } else {
+        state.items = state.items.filter(i => i.id !== id);
+        saveDemoState();
+      }
+      showToast('Artikel entfernt');
+    }
+
+    async function clearAllCompleted() {
+      const completedItems = state.items.filter(i => i.completed);
+      if (completedItems.length === 0) return;
+
+      if (state.mode === 'firebase' && state.fbDb) {
+        const refs = getRtdbRefs();
+        const updates = {};
+        completedItems.forEach(item => {
+          updates[item.id] = null;
+        });
+        await update(refs.itemsRef, updates);
+      } else {
+        state.items = state.items.filter(i => !i.completed);
+        saveDemoState();
+      }
+      showToast('Erledigte Artikel gelöscht');
+    }
+
+    async function addStore(name, emoji, color) {
+      const cleanName = name.trim();
+      if (!cleanName) return;
+      const cleanEmoji = emoji.trim() || '🏪';
+
+      if (state.mode === 'firebase' && state.fbDb) {
+        const refs = getRtdbRefs();
+        const newRef = push(refs.storesRef);
+        await set(newRef, { name: cleanName, emoji: cleanEmoji, color });
+      } else {
+        const newStore = {
+          id: 'store-' + Date.now(),
+          name: cleanName,
+          emoji: cleanEmoji,
+          color
+        };
+        state.stores.push(newStore);
+        saveDemoState();
+      }
+      showToast(`Laden "${cleanName}" angelegt`);
+    }
+
+    async function deleteStore(storeId) {
+      if (state.activeStoreFilter === storeId) {
+        state.activeStoreFilter = 'ALL';
+      }
+
+      if (state.mode === 'firebase' && state.fbDb) {
+        const refs = getRtdbRefs();
+        await remove(refs.storeRef(storeId));
+        // Tag auch aus allen Artikeln entfernen
+        const itemUpdates = {};
+        state.items.forEach(item => {
+          if (item.storeIds && item.storeIds.includes(storeId)) {
+            const nextTags = item.storeIds.filter(id => id !== storeId);
+            itemUpdates[`${item.id}/storeIds`] = nextTags.length > 0 ? nextTags : null;
+          }
+        });
+        if (Object.keys(itemUpdates).length > 0) {
+          await update(refs.itemsRef, itemUpdates);
+        }
+      } else {
+        state.stores = state.stores.filter(s => s.id !== storeId);
+        state.items.forEach(item => {
+          item.storeIds = (item.storeIds || []).filter(id => id !== storeId);
+        });
+        saveDemoState();
+      }
+      showToast('Laden gelöscht');
+    }
+
+    // =========================================================================
+    // 6. UI-RENDERING (ANFRAGENDER, EINKAUFENDER, CHIPS, MODALS)
+    // =========================================================================
+    function switchTab(tab) {
+      state.activeTab = tab;
+      localStorage.setItem(LS_KEYS.ACTIVE_TAB, tab);
+
+      const tabReq = document.getElementById('tabRequester');
+      const tabShop = document.getElementById('tabShopper');
+      const viewReq = document.getElementById('viewRequester');
+      const viewShop = document.getElementById('viewShopper');
+
+      if (tab === 'requester') {
+        tabReq.className = 'py-2.5 px-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all bg-white text-emerald-700 shadow-sm';
+        tabReq.setAttribute('aria-selected', 'true');
+        tabShop.className = 'py-2.5 px-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all text-slate-600 hover:text-slate-900';
+        tabShop.setAttribute('aria-selected', 'false');
+        viewReq.classList.remove('hidden');
+        viewShop.classList.add('hidden');
+      } else {
+        tabShop.className = 'py-2.5 px-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all bg-white text-emerald-700 shadow-sm';
+        tabShop.setAttribute('aria-selected', 'true');
+        tabReq.className = 'py-2.5 px-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all text-slate-600 hover:text-slate-900';
+        tabReq.setAttribute('aria-selected', 'false');
+        viewShop.classList.remove('hidden');
+        viewReq.classList.add('hidden');
+      }
+      renderAll();
+    }
+
+    function renderColorPicker() {
+      const container = document.getElementById('colorPickerGroup');
+      if (!container) return;
+      container.innerHTML = Object.entries(COLOR_PALETTE).map(([key, token]) => {
+        const isSelected = state.selectedNewStoreColor === key;
+        return `
+          <button type="button" data-select-color="${key}" aria-label="${token.label}"
+            class="w-6 h-6 rounded-full ${token.dot} transition-transform ${isSelected ? 'ring-2 ring-offset-2 ring-slate-800 scale-110' : 'opacity-75 hover:opacity-100'}">
+          </button>
+        `;
+      }).join('');
+    }
+
+    function renderStoreFilterBar() {
+      const bar = document.getElementById('storeFilterBar');
+      if (!bar) return;
+
+      const openItems = state.items.filter(i => !i.completed);
+      const unassignedCount = openItems.filter(i => !i.storeIds || i.storeIds.length === 0).length;
+
+      const chips = [];
+
+      // Chip: Alle
+      const allActive = state.activeStoreFilter === 'ALL';
+      chips.push(`
+        <button type="button" data-filter-store="ALL"
+          class="shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 ${
+            allActive
+              ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+              : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+          }">
+          <span>Alle</span>
+          <span class="px-1.5 py-0.2 rounded-full text-[11px] ${allActive ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'}">${openItems.length}</span>
+        </button>
+      `);
+
+      // Chip: Ohne Laden
+      const unassignedActive = state.activeStoreFilter === 'UNASSIGNED';
+      chips.push(`
+        <button type="button" data-filter-store="UNASSIGNED"
+          class="shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 ${
+            unassignedActive
+              ? 'bg-amber-500 text-white border-amber-500 shadow-xs'
+              : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+          }">
+          <span>❓ Ohne Laden</span>
+          <span class="px-1.5 py-0.2 rounded-full text-[11px] ${unassignedActive ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'}">${unassignedCount}</span>
+        </button>
+      `);
+
+      // Chips für alle Läden
+      state.stores.forEach(store => {
+        const count = openItems.filter(i => (i.storeIds || []).includes(store.id)).length;
+        const isActive = state.activeStoreFilter === store.id;
+        const tokens = getColorTokens(store.color);
+        chips.push(`
+          <button type="button" data-filter-store="${escapeHtml(store.id)}"
+            class="shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 ${
+              isActive
+                ? tokens.chipActive
+                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+            }">
+            <span>${escapeHtml(store.emoji)}</span>
+            <span>${escapeHtml(store.name)}</span>
+            <span class="px-1.5 py-0.2 rounded-full text-[11px] ${isActive ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-600'}">${count}</span>
+          </button>
+        `);
+      });
+
+      bar.innerHTML = chips.join('');
+    }
+
+    function renderStoreBadgesHtml(storeIds) {
+      if (!storeIds || storeIds.length === 0) return '';
+      return storeIds.map(id => {
+        const store = state.stores.find(s => s.id === id);
+        if (!store) return '';
+        const tokens = getColorTokens(store.color);
+        return `
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-semibold border ${tokens.badge}">
+            <span>${escapeHtml(store.emoji)}</span>
+            <span>${escapeHtml(store.name)}</span>
+          </span>
+        `;
+      }).join('');
+    }
+
+    function renderRequesterList() {
+      const container = document.getElementById('requesterListContainer');
+      const summary = document.getElementById('requesterListSummary');
+      if (!container) return;
+
+      const openItems = state.items
+        .filter(i => !i.completed)
+        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+      summary.textContent = `${openItems.length} ${openItems.length === 1 ? 'Artikel' : 'Artikel'} offen`;
+
+      if (openItems.length === 0) {
+        container.innerHTML = `
+          <div class="bg-white rounded-2xl p-8 text-center border border-dashed border-slate-200">
+            <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-3">
+              <i data-lucide="check-circle-2" class="w-6 h-6"></i>
+            </div>
+            <p class="text-sm font-bold text-slate-700">Alles erledigt!</p>
+            <p class="text-xs text-slate-400 mt-1">Füge oben neue Dinge hinzu, die eingekauft werden sollen.</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = openItems.map(item => {
+        const badges = renderStoreBadgesHtml(item.storeIds);
+        return `
+          <div class="bg-white rounded-2xl p-3.5 shadow-xs border border-slate-200/80 flex items-center justify-between gap-3 animate-fade-in">
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="font-bold text-slate-900 text-base break-words">${escapeHtml(item.name)}</span>
+                ${item.qty ? `<span class="text-xs font-bold px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700">${escapeHtml(item.qty)}</span>` : ''}
+              </div>
+              ${item.note ? `<p class="text-xs text-slate-500 mt-0.5 break-words">${escapeHtml(item.note)}</p>` : ''}
+              ${badges ? `<div class="flex flex-wrap gap-1 mt-2">${badges}</div>` : ''}
+            </div>
+
+            <div class="flex items-center gap-1 shrink-0">
+              <button type="button" data-edit-item="${escapeHtml(item.id)}" aria-label="Bearbeiten"
+                class="p-2.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition">
+                <i data-lucide="pencil" class="w-4 h-4"></i>
+              </button>
+              <button type="button" data-delete-item="${escapeHtml(item.id)}" aria-label="Löschen"
+                class="p-2.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderShopperList() {
+      const container = document.getElementById('shopperListContainer');
+      const titleEl = document.getElementById('activeFilterTitle');
+      const countEl = document.getElementById('activeFilterCount');
+      if (!container) return;
+
+      const openItems = state.items
+        .filter(i => !i.completed)
+        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+      let filteredItems = openItems;
+      if (state.activeStoreFilter === 'UNASSIGNED') {
+        titleEl.textContent = 'Ohne Laden-Zuordnung';
+        filteredItems = openItems.filter(i => !i.storeIds || i.storeIds.length === 0);
+      } else if (state.activeStoreFilter !== 'ALL') {
+        const store = state.stores.find(s => s.id === state.activeStoreFilter);
+        titleEl.textContent = store ? `${store.emoji} ${store.name}` : 'Gefilterte Artikel';
+        filteredItems = openItems.filter(i => (i.storeIds || []).includes(state.activeStoreFilter));
+      } else {
+        titleEl.textContent = 'Alle offenen Artikel';
+      }
+
+      countEl.textContent = String(filteredItems.length);
+
+      if (filteredItems.length === 0) {
+        container.innerHTML = `
+          <div class="bg-white rounded-2xl p-8 text-center border border-dashed border-slate-200">
+            <p class="text-sm font-bold text-slate-700">Keine Artikel in dieser Ansicht</p>
+            <p class="text-xs text-slate-400 mt-1">Wähle oben einen anderen Laden oder weise Artikeln neue Laden-Tags zu.</p>
+          </div>
+        `;
+      } else {
+        container.innerHTML = filteredItems.map(item => {
+          const badges = renderStoreBadgesHtml(item.storeIds);
+          return `
+            <div class="bg-white rounded-2xl p-3.5 shadow-xs border border-slate-200/80 flex items-center gap-3 animate-fade-in">
+              <!-- Großer Touch-Bereich zum Abhaken -->
+              <button type="button" data-toggle-complete="${escapeHtml(item.id)}" aria-label="Als eingekauft abhaken"
+                class="w-11 h-11 shrink-0 rounded-xl border-2 border-slate-300 hover:border-emerald-500 active:scale-95 flex items-center justify-center text-transparent hover:text-emerald-500 transition">
+                <i data-lucide="check" class="w-5 h-5"></i>
+              </button>
+
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="font-bold text-slate-900 text-base break-words">${escapeHtml(item.name)}</span>
+                  ${item.qty ? `<span class="text-xs font-bold px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700">${escapeHtml(item.qty)}</span>` : ''}
+                </div>
+                ${item.note ? `<p class="text-xs text-slate-500 mt-0.5 break-words">${escapeHtml(item.note)}</p>` : ''}
+                <div class="flex flex-wrap items-center gap-1.5 mt-2">
+                  ${badges}
+                  <button type="button" data-open-tags="${escapeHtml(item.id)}"
+                    class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 hover:bg-slate-200/80 text-slate-600 transition">
+                    <i data-lucide="tag" class="w-3 h-3"></i>
+                    <span>${(item.storeIds && item.storeIds.length > 0) ? 'Läden ändern' : '+ Laden wählen'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      // Kürzlich eingekauft (Completed)
+      const completedItems = state.items
+        .filter(i => i.completed)
+        .sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0));
+
+      const completedSection = document.getElementById('completedSection');
+      const completedContainer = document.getElementById('completedListContainer');
+      const completedBadge = document.getElementById('completedCountBadge');
+      const chevron = document.getElementById('completedChevron');
+
+      if (completedItems.length === 0) {
+        completedSection.classList.add('hidden');
+      } else {
+        completedSection.classList.remove('hidden');
+        completedBadge.textContent = String(completedItems.length);
+        if (chevron) {
+          chevron.style.transform = state.completedExpanded ? 'rotate(0deg)' : 'rotate(-90deg)';
+        }
+        if (state.completedExpanded) {
+          completedContainer.classList.remove('hidden');
+          completedContainer.innerHTML = completedItems.map(item => `
+            <div class="bg-white/80 rounded-xl px-3 py-2.5 border border-slate-200/60 flex items-center justify-between gap-2">
+              <button type="button" data-toggle-complete="${escapeHtml(item.id)}"
+                class="flex items-center gap-2.5 text-left min-w-0 flex-1 group">
+                <span class="w-7 h-7 shrink-0 rounded-lg bg-emerald-600 text-white flex items-center justify-center">
+                  <i data-lucide="check" class="w-4 h-4"></i>
+                </span>
+                <span class="text-sm font-medium text-slate-400 line-through truncate group-hover:text-slate-600">
+                  ${escapeHtml(item.name)} ${item.qty ? `(${escapeHtml(item.qty)})` : ''}
+                </span>
+              </button>
+              <button type="button" data-delete-item="${escapeHtml(item.id)}" aria-label="Endgültig löschen"
+                class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition">
+                <i data-lucide="x" class="w-4 h-4"></i>
+              </button>
+            </div>
+          `).join('');
+        } else {
+          completedContainer.classList.add('hidden');
+        }
+      }
+    }
+
+    function renderManageStoresModal() {
+      const list = document.getElementById('existingStoresList');
+      if (!list) return;
+      list.innerHTML = state.stores.map(store => {
+        const tokens = getColorTokens(store.color);
+        return `
+          <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+            <span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs font-bold border ${tokens.badge}">
+              <span>${escapeHtml(store.emoji)}</span>
+              <span>${escapeHtml(store.name)}</span>
+            </span>
+            <button type="button" data-delete-store="${escapeHtml(store.id)}" aria-label="Laden löschen"
+              class="p-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderAssignTagsModal() {
+      if (!state.assigningItemId) return;
+      const item = state.items.find(i => i.id === state.assigningItemId);
+      if (!item) return;
+
+      document.getElementById('assignTagsItemTitle').textContent = item.name;
+      const optionsContainer = document.getElementById('assignTagsOptions');
+      const assignedSet = new Set(item.storeIds || []);
+
+      optionsContainer.innerHTML = state.stores.map(store => {
+        const isSelected = assignedSet.has(store.id);
+        const tokens = getColorTokens(store.color);
+        return `
+          <button type="button" data-toggle-store-tag="${escapeHtml(store.id)}"
+            class="p-3 rounded-xl border text-left transition flex items-center justify-between gap-2 ${
+              isSelected
+                ? `${tokens.badge} ring-2 ring-emerald-500/40 font-bold`
+                : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 font-medium'
+            }">
+            <span class="flex items-center gap-2 truncate text-xs">
+              <span class="text-base">${escapeHtml(store.emoji)}</span>
+              <span class="truncate">${escapeHtml(store.name)}</span>
+            </span>
+            ${isSelected ? '<i data-lucide="check-circle-2" class="w-4 h-4 shrink-0 text-emerald-600"></i>' : ''}
+          </button>
+        `;
+      }).join('');
+    }
+
+    function renderAll() {
+      const openCount = state.items.filter(i => !i.completed).length;
+      const badgeReq = document.getElementById('badgeRequesterCount');
+      const badgeShop = document.getElementById('badgeShopperCount');
+      if (badgeReq) badgeReq.textContent = String(openCount);
+      if (badgeShop) badgeShop.textContent = String(openCount);
+
+      renderStoreFilterBar();
+      renderRequesterList();
+      renderShopperList();
+      renderManageStoresModal();
+      renderAssignTagsModal();
+
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+    }
+
+    // =========================================================================
+    // 7. EVENT-LISTENER SETUP
+    // =========================================================================
+    function setupEventListeners() {
+      // Initialer Tab-Zustand
+      switchTab(state.activeTab);
+
+      // Rollen-Umschalter
+      document.getElementById('tabRequester').addEventListener('click', () => switchTab('requester'));
+      document.getElementById('tabShopper').addEventListener('click', () => switchTab('shopper'));
+
+      // Neuen Artikel hinzufügen
+      document.getElementById('addItemForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const nameInput = document.getElementById('inputName');
+        const qtyInput = document.getElementById('inputQty');
+        const noteInput = document.getElementById('inputNote');
+        await addItem(nameInput.value, qtyInput.value, noteInput.value);
+        nameInput.value = '';
+        qtyInput.value = '';
+        noteInput.value = '';
+        nameInput.focus();
+      });
+
+      // Artikel bearbeiten Formular
+      document.getElementById('editItemForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('editItemId').value;
+        const name = document.getElementById('editItemName').value;
+        const qty = document.getElementById('editItemQty').value;
+        const note = document.getElementById('editItemNote').value;
+        await updateItemDetails(id, name, qty, note);
+        closeModal('editItemModal');
+      });
+
+      // Läden verwalten öffnen
+      document.getElementById('openManageStoresBtn').addEventListener('click', () => {
+        renderManageStoresModal();
+        openModal('manageStoresModal');
+        if (window.lucide) window.lucide.createIcons();
+      });
+
+      document.getElementById('quickAddStoreFromAssignBtn').addEventListener('click', () => {
+        closeModal('assignTagsModal');
+        renderManageStoresModal();
+        openModal('manageStoresModal');
+        if (window.lucide) window.lucide.createIcons();
+      });
+
+      // Neuen Laden hinzufügen
+      document.getElementById('addStoreForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const emojiInput = document.getElementById('newStoreEmoji');
+        const nameInput = document.getElementById('newStoreName');
+        await addStore(nameInput.value, emojiInput.value, state.selectedNewStoreColor);
+        nameInput.value = '';
+        emojiInput.value = '🏪';
+      });
+
+      // Erledigte ein-/ausklappen & leeren
+      document.getElementById('toggleCompletedBtn').addEventListener('click', () => {
+        state.completedExpanded = !state.completedExpanded;
+        renderShopperList();
+        if (window.lucide) window.lucide.createIcons();
+      });
+
+      document.getElementById('clearCompletedBtn').addEventListener('click', async () => {
+        await clearAllCompleted();
+      });
+
+      const openFirebaseModal = () => {
+        const savedCfgStr = localStorage.getItem(LS_KEYS.FB_CONFIG) || '';
+        const savedRoom = localStorage.getItem(LS_KEYS.ROOM_ID) || 'unsere-familie';
+        document.getElementById('firebaseConfigTextarea').value = savedCfgStr;
+        document.getElementById('familyRoomInput').value = savedRoom;
+        try {
+          const parsed = savedCfgStr ? JSON.parse(savedCfgStr) : {};
+          document.getElementById('databaseUrlFallbackInput').value = parsed.databaseURL || '';
+        } catch (_) {
+          document.getElementById('databaseUrlFallbackInput').value = '';
+        }
+        document.getElementById('firebaseErrorMsg').classList.add('hidden');
+        if (state.mode === 'firebase') {
+          document.getElementById('shareSection').classList.remove('hidden');
+        }
+        openModal('settingsModal');
+        if (window.lucide) window.lucide.createIcons();
+      };
+
+      document.getElementById('openSettingsBtn').addEventListener('click', openFirebaseModal);
+      document.getElementById('syncStatusBtn').addEventListener('click', openFirebaseModal);
+
+      // Teilen-Link kopieren
+      document.getElementById('copyShareLinkBtn').addEventListener('click', () => {
+        const shareUrl = buildShareUrl();
+        const copied = copyTextFallback(shareUrl);
+        if (copied) {
+          showToast('✓ Familien-Link in Zwischenablage kopiert!');
+        } else {
+          showToast('Link konnte nicht automatisch kopiert werden', 'error');
+        }
+      });
+
+      // Schließen-Buttons für alle Modals
+      document.querySelectorAll('[data-close-modal]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const targetId = btn.getAttribute('data-close-modal');
+          if (targetId === 'assignTagsModal') state.assigningItemId = null;
+          closeModal(targetId);
+        });
+      });
+
+      // Firebase Config speichern & verbinden
+      document.getElementById('firebaseConfigForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const errBox = document.getElementById('firebaseErrorMsg');
+        errBox.classList.add('hidden');
+
+        const rawInput = document.getElementById('firebaseConfigTextarea').value.trim();
+        const fallbackUrl = document.getElementById('databaseUrlFallbackInput').value.trim();
+        const roomId = document.getElementById('familyRoomInput').value.trim() || 'unsere-familie';
+
+        if (!rawInput) {
+          errBox.textContent = 'Bitte füge eine gültige Firebase-Konfiguration ein.';
+          errBox.classList.remove('hidden');
+          return;
+        }
+
+        try {
+          // Extrahiert das JSON/JS-Objekt auch dann, wenn "const firebaseConfig = { ... };" mitkopiert wurde
+          const startIdx = rawInput.indexOf('{');
+          const endIdx = rawInput.lastIndexOf('}');
+          if (startIdx === -1 || endIdx === -1) {
+            throw new Error('Kein gültiges Objekt {...} erkannt.');
+          }
+          const objectStr = rawInput.slice(startIdx, endIdx + 1);
+          // Wandelt unquoted JS-Keys (apiKey: "...") sicher in gültiges JSON um, ohne URLs (https://) zu beschädigen
+          const normalizedJson = objectStr
+            .replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":')
+            .replace(/'/g, '"')
+            .replace(/,\s*}/g, '}');
+
+          const parsedConfig = JSON.parse(normalizedJson);
+          if (!parsedConfig.apiKey || !parsedConfig.projectId) {
+            throw new Error('apiKey oder projectId fehlt in der Konfiguration.');
+          }
+
+          if (fallbackUrl) {
+            parsedConfig.databaseURL = fallbackUrl;
+          }
+
+          localStorage.setItem(LS_KEYS.FB_CONFIG, JSON.stringify(parsedConfig, null, 2));
+          localStorage.setItem(LS_KEYS.ROOM_ID, roomId);
+
+          await initFirebaseMode(parsedConfig);
+          closeModal('settingsModal');
+          showToast('Erfolgreich mit Realtime Database verbunden!');
+        } catch (err) {
+          errBox.textContent = 'Verbindung fehlgeschlagen: ' + err.message;
+          errBox.classList.remove('hidden');
+        }
+      });
+
+      document.getElementById('disconnectFirebaseBtn').addEventListener('click', () => {
+        localStorage.removeItem(LS_KEYS.FB_CONFIG);
+        initDemoMode();
+        closeModal('settingsModal');
+        showToast('Lokaler Demo-Modus aktiv');
+      });
+
+      // Zentrale Event-Delegation für dynamisch gerenderte Elemente
+      document.addEventListener('click', async (e) => {
+        const filterBtn = e.target.closest('[data-filter-store]');
+        if (filterBtn) {
+          state.activeStoreFilter = filterBtn.getAttribute('data-filter-store');
+          renderAll();
+          return;
+        }
+
+        const toggleCompleteBtn = e.target.closest('[data-toggle-complete]');
+        if (toggleCompleteBtn) {
+          await toggleItemCompleted(toggleCompleteBtn.getAttribute('data-toggle-complete'));
+          return;
+        }
+
+        const editBtn = e.target.closest('[data-edit-item]');
+        if (editBtn) {
+          const id = editBtn.getAttribute('data-edit-item');
+          const item = state.items.find(i => i.id === id);
+          if (item) {
+            document.getElementById('editItemId').value = item.id;
+            document.getElementById('editItemName').value = item.name;
+            document.getElementById('editItemQty').value = item.qty || '';
+            document.getElementById('editItemNote').value = item.note || '';
+            openModal('editItemModal');
+          }
+          return;
+        }
+
+        const deleteItemBtn = e.target.closest('[data-delete-item]');
+        if (deleteItemBtn) {
+          await deleteItem(deleteItemBtn.getAttribute('data-delete-item'));
+          return;
+        }
+
+        const openTagsBtn = e.target.closest('[data-open-tags]');
+        if (openTagsBtn) {
+          state.assigningItemId = openTagsBtn.getAttribute('data-open-tags');
+          renderAssignTagsModal();
+          openModal('assignTagsModal');
+          if (window.lucide) window.lucide.createIcons();
+          return;
+        }
+
+        const toggleStoreTagBtn = e.target.closest('[data-toggle-store-tag]');
+        if (toggleStoreTagBtn && state.assigningItemId) {
+          const storeId = toggleStoreTagBtn.getAttribute('data-toggle-store-tag');
+          await toggleItemStoreTag(state.assigningItemId, storeId);
+          renderAssignTagsModal();
+          if (window.lucide) window.lucide.createIcons();
+          return;
+        }
+
+        const selectColorBtn = e.target.closest('[data-select-color]');
+        if (selectColorBtn) {
+          state.selectedNewStoreColor = selectColorBtn.getAttribute('data-select-color');
+          renderColorPicker();
+          return;
+        }
+
+        const deleteStoreBtn = e.target.closest('[data-delete-store]');
+        if (deleteStoreBtn) {
+          await deleteStore(deleteStoreBtn.getAttribute('data-delete-store'));
+          return;
+        }
+      });
+    }
+
+    // =========================================================================
+    // 8. APP-START (MIT FEST VERANKERTER REALTIME DATABASE VERBINDUNG)
+    // =========================================================================
+    async function bootstrap() {
+      setupEventListeners();
+      renderColorPicker();
+
+      // 1. Prüfe ob ein Familien-Share-Link (?room=...&cfg=...) geöffnet wurde
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const sharedCfg = params.get('cfg');
+        const sharedRoom = params.get('room');
+        if (sharedCfg) {
+          const decodedCfg = decodeSharePayload(sharedCfg);
+          if (decodedCfg && decodedCfg.apiKey && decodedCfg.projectId) {
+            localStorage.setItem(LS_KEYS.FB_CONFIG, JSON.stringify(decodedCfg, null, 2));
+            if (sharedRoom) {
+              localStorage.setItem(LS_KEYS.ROOM_ID, sharedRoom);
+            }
+            window.history.replaceState({}, document.title, window.location.pathname);
+            await initFirebaseMode(decodedCfg);
+            showToast(`Verbunden mit Familien-Liste "${sharedRoom || HARDCODED_ROOM_ID}"`);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('Share-Link konnte nicht gelesen werden:', e);
+      }
+
+      // 2. Prüfe ob bereits eine überschriebene Config im localStorage liegt
+      const savedConfigStr = localStorage.getItem(LS_KEYS.FB_CONFIG);
+      if (savedConfigStr) {
+        try {
+          const cfg = JSON.parse(savedConfigStr);
+          await initFirebaseMode(cfg);
+          return;
+        } catch (e) {
+          console.warn('Gespeicherte Firebase-Config ungültig, nutze fest verankerte Config.', e);
+        }
+      }
+
+      // 3. Fest im Code verankerte Firebase Realtime Database Verbindung nutzen
+      if (HARDCODED_FIREBASE_CONFIG && HARDCODED_FIREBASE_CONFIG.apiKey) {
+        try {
+          if (!localStorage.getItem(LS_KEYS.ROOM_ID)) {
+            localStorage.setItem(LS_KEYS.ROOM_ID, HARDCODED_ROOM_ID);
+          }
+          await initFirebaseMode(HARDCODED_FIREBASE_CONFIG);
+          return;
+        } catch (e) {
+          console.error('Fest verankerte Firebase-Verbindung fehlgeschlagen:', e);
+        }
+      }
+
+      // 4. Fallback: Lokaler Demo-Modus
+      initDemoMode();
+    }
+
+    bootstrap();
+  </script>
+</body>
+</html>
